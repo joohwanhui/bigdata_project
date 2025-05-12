@@ -1,3 +1,24 @@
+알겠습니다. 네이버 웹툰 메인 페이지 (https://comic.naver.com/webtoon)에 있는 웹툰 목록 중 순위가 표시되는 "실시간 인기 웹툰" 섹션을 기준으로 정보를 가져오겠습니다.
+
+크롤링할 정보:
+
+순위 (Rank)
+썸네일 이미지 URL (Thumbnail Image URL)
+웹툰 URL (Webtoon URL) (사용자 요청에는 없었지만, 일반적으로 필요하여 포함)
+제목 (Title) (사용자 요청에는 없었지만, 명확성을 위해 포함)
+작가명 (Author)
+평점 (Rating): "실시간 인기 웹툰" 섹션에는 별점이 직접 표시되지 않습니다. 해당 위치에 평점이 없으므로 "N/A (메인 페이지 목록)"로 표시하거나, 각 웹툰 상세 페이지로 이동해야 정확한 평점을 가져올 수 있습니다. 이 코드에서는 메인 페이지에 보이는 정보만 가져오므로 "N/A"로 처리하겠습니다. 만약 각 웹툰의 상세 평점이 꼭 필요하다면 코드가 더 복잡해집니다. (사용자 요청에 "평점"이 두 번 언급되어, 중요하게 생각하시는 것 같지만, 현재 대상 섹션에는 없습니다.)
+주의사항:
+
+웹사이트의 HTML 구조는 네이버에서 업데이트할 경우 변경될 수 있으며, 이 경우 CSS 선택자가 동작하지 않아 코드를 수정해야 합니다. (현재 코드는 2025년 5월 기준입니다.)
+과도한 크롤링은 서비스 제공자에게 부담을 줄 수 있으므로, 적절한 간격(예: time.sleep)을 두거나 API 사용 가능 여부를 확인하는 것이 좋습니다. (이 코드에서는 간단한 예시로 최소한의 대기만 포함합니다.)
+필요 라이브러리 설치 (이미 설치하셨다면 생략):
+
+Bash
+
+pip install selenium webdriver-manager pandas
+Python 코드:
+
 Python
 
 import time
@@ -10,113 +31,99 @@ from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 
-def get_monday_webtoons_data():
+def get_naver_main_popular_webtoons():
     """
-    네이버 월요 웹툰 목록에서 웹툰 정보를 크롤링합니다.
-    썸네일 이미지 URL, 웹툰 URL, 작가명, 평점을 가져옵니다.
+    네이버 웹툰 메인 페이지의 '실시간 인기 웹툰' 목록에서 정보를 크롤링합니다.
     """
-    # 웹드라이버 설정
     options = webdriver.ChromeOptions()
-    options.add_argument('--headless')  # 브라우저 창을 띄우지 않음
-    options.add_argument('--disable-gpu') # GPU 가속 비활성화 (일부 시스템에서 필요)
-    options.add_argument('--no-sandbox') # Sandbox 프로세스 사용 안함 (Linux에서 root로 실행시 필요)
-    options.add_argument('--disable-dev-shm-usage') # /dev/shm 파티션 사용 안함 (메모리 부족 문제 방지)
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36") # User-Agent 설정
+    options.add_argument('--headless')
+    options.add_argument('--disable-gpu')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36")
 
-    # ChromeDriverManager를 사용하여 ChromeDriver 자동 설치 및 서비스 시작
     try:
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=options)
     except Exception as e:
         print(f"웹 드라이버 설정 중 오류 발생: {e}")
-        print("ChromeDriver가 올바르게 설치되었는지 확인하거나, 직접 경로를 지정해주세요.")
         return None
 
-    # 네이버 웹툰 월요 웹툰 페이지 URL
-    url = "https://comic.naver.com/webtoon/weekdayList?week=mon"
-    driver.get(url)
+    base_url = "https://comic.naver.com/webtoon"
+    driver.get(base_url)
 
     webtoon_data = []
 
     try:
-        # 웹툰 목록이 로드될 때까지 대기 (최대 20초)
-        # 주의: 클래스명은 네이버 웹툰 페이지 업데이트에 따라 변경될 수 있습니다.
-        # 2025년 5월 기준, 웹툰 리스트를 감싸는 ul 태그의 클래스명
-        list_selector = "ul.WeekdayMainView__daily_list--R52lc"
+        # '실시간 인기 웹툰' 목록을 포함하는 부모 요소 대기 (2025년 5월 기준 선택자)
+        # 이 섹션은 <aside> 태그 내에 위치하며, 제목이 "실시간 인기 웹툰" 임을 확인했습니다.
+        # 해당 리스트의 부모 wrapper 선택자
+        popular_list_wrapper_selector = "div.AsideEpisode__episode_list_wrap--J06c9" # ul 태그의 부모 div
         WebDriverWait(driver, 20).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, list_selector))
+            EC.presence_of_element_located((By.CSS_SELECTOR, popular_list_wrapper_selector))
         )
 
-        # 각 웹툰 아이템을 선택합니다. (li 태그)
-        # 2025년 5월 기준, 각 웹툰 아이템 li 태그의 클래스명
-        webtoon_items = driver.find_elements(By.CSS_SELECTOR, f"{list_selector} > li.WeekdayMainView__item--Sn_s5")
+        # '실시간 인기 웹툰'의 각 아이템 (li) 가져오기
+        webtoon_items_selector = f"{popular_list_wrapper_selector} > ul > li.AsideEpisode__item--i30Zc"
+        webtoon_items = driver.find_elements(By.CSS_SELECTOR, webtoon_items_selector)
 
         if not webtoon_items:
-            print("웹툰 아이템을 찾을 수 없습니다. CSS 선택자를 확인해주세요.")
+            print("실시간 인기 웹툰 아이템을 찾을 수 없습니다. CSS 선택자를 확인해주세요.")
             driver.quit()
             return None
 
-        print(f"총 {len(webtoon_items)}개의 월요 웹툰을 찾았습니다. 정보 수집을 시작합니다...")
+        print(f"총 {len(webtoon_items)}개의 실시간 인기 웹툰을 찾았습니다. 정보 수집을 시작합니다...")
 
         for item in webtoon_items:
             try:
+                # 순위 (Rank)
+                # 순위는 li 태그 내의 span.AsideEpisode__ranking_number--f3sS1 에 있음
+                rank_element = item.find_element(By.CSS_SELECTOR, "span.AsideEpisode__ranking_number--f3sS1")
+                rank = rank_element.text.strip()
+
+                # 웹툰 링크, 썸네일, 제목, 작가명을 포함하는 a 태그
+                # a.Poster__link_area--LgU26.Poster__link_area--aside_episode--W1Y7R
+                link_anchor = item.find_element(By.CSS_SELECTOR, "a.Poster__link_area--LgU26")
+                webtoon_url = link_anchor.get_attribute('href')
+
                 # 썸네일 이미지 URL
-                # 2025년 5월 기준, 썸네일 이미지를 포함하는 div 내부의 img 태그
-                thumbnail_element = item.find_element(By.CSS_SELECTOR, "div.Thumbnail__image_area--jG1Fc img.Thumbnail__image--K9J99")
+                # div.Poster__thumbnail_area--NzY07 > img.Poster__image--d9XoQ
+                thumbnail_element = link_anchor.find_element(By.CSS_SELECTOR, "img.Poster__image--d9XoQ")
                 thumbnail_url = thumbnail_element.get_attribute('src')
 
-                # 웹툰 링크 (주소) 와 제목
-                # 2025년 5월 기준, 웹툰 링크 a 태그
-                link_element = item.find_element(By.CSS_SELECTOR, "a.Poster__link--KNf69")
-                webtoon_url = link_element.get_attribute('href')
-                # title_text = link_element.get_attribute('title') # 웹툰 제목도 가져올 수 있음
+                # 제목 (Title)
+                # strong.Poster__title--ihk_x.Poster__title--aside_episode--s0h7z
+                title_element = link_anchor.find_element(By.CSS_SELECTOR, "strong.Poster__title--ihk_x")
+                title = title_element.text.strip()
 
-                # 작가명
-                # 2025년 5월 기준, 작가명을 포함하는 span 태그
-                # 작가가 여러 명일 수 있으므로 find_elements 후 join 처리
-                author_elements = item.find_elements(By.CSS_SELECTOR, "span.ContentAuthor__author--CTAAP")
-                authors = ", ".join([author.text.strip() for author in author_elements if author.text.strip()])
-                if not authors: # 간혹 구조가 다른 경우 (예: '글/그림' 같이 표시)
-                    try:
-                        # 대체 선택자 (더 일반적일 수 있지만, 정확도는 떨어질 수 있음)
-                        author_alt_element = item.find_element(By.CSS_SELECTOR, "span.ContentMetaInfo__meta_info--H_info")
-                        authors = author_alt_element.text.strip() # 이 경우 "글/그림 작가명" 형태일 수 있음
-                    except NoSuchElementException:
-                        authors = "N/A"
+                # 작가명 (Author)
+                # span.Poster__author--jD0Rk
+                author_element = link_anchor.find_element(By.CSS_SELECTOR, "span.Poster__author--jD0Rk")
+                author = author_element.text.strip()
 
-
-                # 평점
-                # 2025년 5월 기준, 평점을 포함하는 span 태그
-                try:
-                    rating_element = item.find_element(By.CSS_SELECTOR, "span.Rating__star_num--N2ZOr")
-                    rating = rating_element.text
-                except NoSuchElementException:
-                    rating = "N/A" # 평점이 없는 경우 (신작 등)
+                # 평점 (Rating) - 해당 섹션에는 별점 정보가 없음
+                rating = "N/A (메인 페이지 목록)"
 
                 webtoon_info = {
-                    "thumbnail_image_url": thumbnail_url,
+                    "rank": rank,
+                    "title": title,
+                    "author": author,
+                    "thumbnail_url": thumbnail_url,
                     "webtoon_url": webtoon_url,
-                    "author": authors,
                     "rating": rating
                 }
                 webtoon_data.append(webtoon_info)
-                # print(f"수집 완료: {title_text if 'title_text' in locals() else '제목 미상'}")
 
             except NoSuchElementException as e:
-                print(f"항목 내 일부 요소 누락: {e}")
-                # title_for_error = "알 수 없음"
-                # try:
-                #     title_for_error = item.find_element(By.CSS_SELECTOR, "a.Poster__link--KNf69").get_attribute('title')
-                # except:
-                #     pass
-                # print(f"웹툰 '{title_for_error}' 정보 수집 중 일부 요소 누락. 다음 항목으로 넘어갑니다.")
-                continue # 일부 요소가 없더라도 다음 웹툰으로 계속 진행
-            except Exception as e:
-                print(f"개별 웹툰 정보 수집 중 오류 발생: {e}")
+                # print(f"항목 내 일부 요소 누락 (웹툰 제목: {title if 'title' in locals() else '알 수 없음'}): {e}")
+                print(f"실시간 인기 웹툰 목록 내 일부 요소 누락. 해당 항목 건너뜁니다. 오류: {e}")
                 continue
-
+            except Exception as e:
+                print(f"개별 웹툰 정보 수집 중 알 수 없는 오류 발생: {e}")
+                continue
+        
     except TimeoutException:
-        print("웹툰 목록 로딩 시간 초과. 페이지가 완전히 로드되지 않았거나 선택자가 잘못되었을 수 있습니다.")
+        print("실시간 인기 웹툰 목록 로딩 시간 초과. 페이지 구조나 선택자를 확인해주세요.")
     except Exception as e:
         print(f"크롤링 중 오류 발생: {e}")
     finally:
@@ -125,24 +132,23 @@ def get_monday_webtoons_data():
     return pd.DataFrame(webtoon_data)
 
 if __name__ == "__main__":
-    print("네이버 월요 웹툰 정보 크롤링을 시작합니다...")
+    print("네이버 웹툰 메인 페이지 '실시간 인기 웹툰' 정보 크롤링을 시작합니다...")
     start_time = time.time()
 
-    df_webtoons = get_monday_webtoons_data()
+    df_popular_webtoons = get_naver_main_popular_webtoons()
 
     end_time = time.time()
     print(f"크롤링 완료. 총 소요 시간: {end_time - start_time:.2f}초")
 
-    if df_webtoons is not None and not df_webtoons.empty:
-        print("\n--- 수집된 웹툰 정보 ---")
-        print(df_webtoons)
-        # CSV 파일로 저장 (UTF-8, 한글 깨짐 방지)
+    if df_popular_webtoons is not None and not df_popular_webtoons.empty:
+        print("\n--- 수집된 실시간 인기 웹툰 정보 ---")
+        print(df_popular_webtoons)
         try:
-            df_webtoons.to_csv("naver_monday_webtoons.csv", index=False, encoding='utf-8-sig')
-            print("\n데이터가 naver_monday_webtoons.csv 파일로 저장되었습니다.")
+            df_popular_webtoons.to_csv("naver_main_popular_webtoons.csv", index=False, encoding='utf-8-sig')
+            print("\n데이터가 naver_main_popular_webtoons.csv 파일로 저장되었습니다.")
         except Exception as e:
             print(f"CSV 파일 저장 중 오류 발생: {e}")
-    elif df_webtoons is not None and df_webtoons.empty:
-        print("수집된 웹툰 정보가 없습니다. 웹사이트 구조 변경 또는 네트워크 문제를 확인해주세요.")
+    elif df_popular_webtoons is not None and df_popular_webtoons.empty:
+        print("수집된 웹툰 정보가 없습니다. 웹사이트 구조 변경, 네트워크 문제 또는 선택자를 확인해주세요.")
     else:
         print("데이터 수집에 실패했습니다.")
